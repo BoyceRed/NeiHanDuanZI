@@ -1,4 +1,4 @@
-简书地址：http://www.jianshu.com/users/3930920b505b/latest_articles
+想了解更多请移步至简书地址《简书地址》：http://www.jianshu.com/users/3930920b505b/latest_articles
 
 花了两周闲余时间模仿了一下今日头条旗下的iOS端app内涵段子，相信大家对于这个app并不陌生，如果喜欢的话请给个star，也希望大家能够积极提出建议和见解，共同进步。
 
