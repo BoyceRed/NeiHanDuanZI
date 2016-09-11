@@ -24,16 +24,23 @@
 #import "NHPersonalCenterViewController.h"
 #import "NHNeiHanShareManager.h"
 #import "NHHomeAttentionListSectionHeaderView.h"
+#import "WMPlayer.h"
 
-@interface NHDynamicDetailViewController () <NHHomeTableViewCellDelegate, NHDynamicDetailCommentTableViewCellDelegate>
+
+@interface NHDynamicDetailViewController () <NHHomeTableViewCellDelegate, NHDynamicDetailCommentTableViewCellDelegate, WMPlayerDelegate>
 @property (nonatomic, strong) NHHomeTableViewCellFrame *cellFrame;
 @property (nonatomic, strong) NHDiscoverSearchCommonCellFrame *searchCellFrame;
 @property (nonatomic, strong) NSMutableArray *commentCellFrameArray;
 @property (nonatomic, strong) NSMutableArray *topCommentCellFrameArray;
 @property (nonatomic, strong) NSMutableArray *topDataArray;
+@property (nonatomic, strong) NSIndexPath *indexPath;
+@property (nonatomic, weak) NHBaseImageView *imageView;
+@property (nonatomic, assign) BOOL isSmallScreen;
 @end
 
-@implementation NHDynamicDetailViewController
+@implementation NHDynamicDetailViewController {
+    WMPlayer *wmPlayer;
+}
 
 #pragma mark - 构造
 - (instancetype)initWithSearchCellFrame:(NHDiscoverSearchCommonCellFrame *)searchCellFrame {
@@ -121,6 +128,263 @@
   
 
 }
+
+- (void)viewDidDisappear:(BOOL)animated {
+    [super viewDidDisappear:animated];
+    [self releaseWMPlayer];
+}
+
+- (void)scrollViewDidScroll:(UIScrollView *)scrollView {
+    if (wmPlayer.superview) {
+        CGRect rectInTableView = [self.tableView rectForRowAtIndexPath:self.indexPath];
+        CGRect rectInSuperview = [self.tableView convertRect:rectInTableView toView:[self.tableView superview]];
+        if (rectInSuperview.origin.y < -self.imageView.frame.size.height || rectInSuperview.origin.y>kScreenHeight-kTopBarHeight-kTabBarHeight) {//往上拖动
+            
+            if ([[UIApplication sharedApplication].keyWindow.subviews containsObject:wmPlayer]&&self.isSmallScreen) {
+                self.isSmallScreen = YES;
+            } else {
+                [self releaseWMPlayer];
+            }
+        } else {
+            if ([self.imageView.subviews containsObject:wmPlayer]) {
+                
+            } else {
+                [self releaseWMPlayer];
+            }
+        }
+    }
+}
+
+#pragma mark - WMPlayerDelegate
+- (BOOL)prefersStatusBarHidden {
+    if (wmPlayer) {
+        if (wmPlayer.isFullscreen) {
+            return YES;
+        } else {
+            return NO;
+        }
+    } else {
+        return NO;
+    }
+}
+
+- (void)toCell {
+    [wmPlayer removeFromSuperview];
+    [UIView animateWithDuration:0.5f animations:^{
+        wmPlayer.transform = CGAffineTransformIdentity;
+        wmPlayer.frame = self.imageView.bounds;
+        wmPlayer.playerLayer.frame =  wmPlayer.bounds;
+        [self.imageView addSubview:wmPlayer];
+        [self.imageView bringSubviewToFront:wmPlayer];
+        [wmPlayer.bottomView mas_remakeConstraints:^(MASConstraintMaker *make) {
+            make.left.equalTo(wmPlayer).with.offset(0);
+            make.right.equalTo(wmPlayer).with.offset(0);
+            make.height.mas_equalTo(40);
+            make.bottom.equalTo(wmPlayer).with.offset(0);
+        }];
+        [wmPlayer.topView mas_remakeConstraints:^(MASConstraintMaker *make) {
+            make.left.equalTo(wmPlayer).with.offset(0);
+            make.right.equalTo(wmPlayer).with.offset(0);
+            make.height.mas_equalTo(40);
+            make.top.equalTo(wmPlayer).with.offset(0);
+        }];
+        [wmPlayer.titleLabel mas_remakeConstraints:^(MASConstraintMaker *make) {
+            make.left.equalTo(wmPlayer.topView).with.offset(45);
+            make.right.equalTo(wmPlayer.topView).with.offset(-45);
+            make.center.equalTo(wmPlayer.topView);
+            make.top.equalTo(wmPlayer.topView).with.offset(0);
+        }];
+        [wmPlayer.closeBtn mas_remakeConstraints:^(MASConstraintMaker *make) {
+            make.left.equalTo(wmPlayer).with.offset(5);
+            make.height.mas_equalTo(30);
+            make.width.mas_equalTo(30);
+            make.top.equalTo(wmPlayer).with.offset(5);
+        }];
+        [wmPlayer.loadFailedLabel mas_remakeConstraints:^(MASConstraintMaker *make) {
+            make.center.equalTo(wmPlayer);
+            make.width.equalTo(wmPlayer);
+            make.height.equalTo(@30);
+        }];
+    }completion:^(BOOL finished) {
+        wmPlayer.isFullscreen = NO;
+        [self setNeedsStatusBarAppearanceUpdate];
+        self.isSmallScreen = NO;
+        wmPlayer.fullScreenBtn.selected = NO;
+        
+    }];
+    
+    
+}
+
+- (void)toFullScreenWithInterfaceOrientation:(UIInterfaceOrientation )interfaceOrientation {
+    [wmPlayer removeFromSuperview];
+    wmPlayer.transform = CGAffineTransformIdentity;
+    if (interfaceOrientation==UIInterfaceOrientationLandscapeLeft) {
+        wmPlayer.transform = CGAffineTransformMakeRotation(-M_PI_2);
+    } else if(interfaceOrientation==UIInterfaceOrientationLandscapeRight){
+        wmPlayer.transform = CGAffineTransformMakeRotation(M_PI_2);
+    }
+    wmPlayer.frame = CGRectMake(0, 0, kScreenWidth, kScreenHeight);
+    wmPlayer.playerLayer.frame =  CGRectMake(0,0, kScreenHeight,kScreenWidth);
+    
+    [wmPlayer.bottomView mas_remakeConstraints:^(MASConstraintMaker *make) {
+        make.height.mas_equalTo(40);
+        make.top.mas_equalTo(kScreenWidth-40);
+        make.width.mas_equalTo(kScreenHeight);
+    }];
+    
+    [wmPlayer.topView mas_remakeConstraints:^(MASConstraintMaker *make) {
+        make.height.mas_equalTo(40);
+        make.left.equalTo(wmPlayer).with.offset(0);
+        make.width.mas_equalTo(kScreenHeight);
+    }];
+    
+    [wmPlayer.closeBtn mas_remakeConstraints:^(MASConstraintMaker *make) {
+        make.right.equalTo(wmPlayer).with.offset((-kScreenHeight/2));
+        make.height.mas_equalTo(30);
+        make.width.mas_equalTo(30);
+        make.top.equalTo(wmPlayer).with.offset(5);
+        
+    }];
+    
+    [wmPlayer.titleLabel mas_remakeConstraints:^(MASConstraintMaker *make) {
+        make.left.equalTo(wmPlayer.topView).with.offset(45);
+        make.right.equalTo(wmPlayer.topView).with.offset(-45);
+        make.center.equalTo(wmPlayer.topView);
+        make.top.equalTo(wmPlayer.topView).with.offset(0);
+    }];
+    
+    [wmPlayer.loadFailedLabel mas_remakeConstraints:^(MASConstraintMaker *make) {
+        make.width.mas_equalTo(kScreenHeight);
+        make.center.mas_equalTo(CGPointMake(kScreenWidth/2-36, -(kScreenWidth/2)));
+        make.height.equalTo(@30);
+    }];
+    
+    [wmPlayer.loadingView mas_remakeConstraints:^(MASConstraintMaker *make) {
+        make.center.mas_equalTo(CGPointMake(kScreenWidth/2-37, -(kScreenWidth/2-37)));
+    }];
+    [wmPlayer.loadFailedLabel mas_remakeConstraints:^(MASConstraintMaker *make) {
+        make.width.mas_equalTo(kScreenHeight);
+        make.center.mas_equalTo(CGPointMake(kScreenWidth/2-36, -(kScreenWidth/2)+36));
+        make.height.equalTo(@30);
+    }];
+    [[UIApplication sharedApplication].keyWindow addSubview:wmPlayer];
+    
+    wmPlayer.fullScreenBtn.selected = YES;
+    [wmPlayer bringSubviewToFront:wmPlayer.bottomView];
+    
+}
+
+- (void)toSmallScreen {
+    // 放widow上
+    [wmPlayer removeFromSuperview];
+    [UIView animateWithDuration:0.3f animations:^{
+        wmPlayer.transform = CGAffineTransformIdentity;
+        wmPlayer.frame = CGRectMake(kScreenWidth/2,kScreenHeight-kTabBarHeight-(kScreenWidth/2)*0.75, kScreenWidth/2, (kScreenWidth/2)*0.75);
+        wmPlayer.playerLayer.frame = wmPlayer.bounds;
+        [[UIApplication sharedApplication].keyWindow addSubview:wmPlayer];
+        [wmPlayer.bottomView mas_remakeConstraints:^(MASConstraintMaker *make) {
+            make.left.equalTo(wmPlayer).with.offset(0);
+            make.right.equalTo(wmPlayer).with.offset(0);
+            make.height.mas_equalTo(40);
+            make.bottom.equalTo(wmPlayer).with.offset(0);
+        }];
+        [wmPlayer.topView mas_remakeConstraints:^(MASConstraintMaker *make) {
+            make.left.equalTo(wmPlayer).with.offset(0);
+            make.right.equalTo(wmPlayer).with.offset(0);
+            make.height.mas_equalTo(40);
+            make.top.equalTo(wmPlayer).with.offset(0);
+        }];
+        [wmPlayer.titleLabel mas_remakeConstraints:^(MASConstraintMaker *make) {
+            make.left.equalTo(wmPlayer.topView).with.offset(45);
+            make.right.equalTo(wmPlayer.topView).with.offset(-45);
+            make.center.equalTo(wmPlayer.topView);
+            make.top.equalTo(wmPlayer.topView).with.offset(0);
+        }];
+        [wmPlayer.closeBtn mas_remakeConstraints:^(MASConstraintMaker *make) {
+            make.left.equalTo(wmPlayer).with.offset(5);
+            make.height.mas_equalTo(30);
+            make.width.mas_equalTo(30);
+            make.top.equalTo(wmPlayer).with.offset(5);
+            
+        }];
+        [wmPlayer.loadFailedLabel mas_remakeConstraints:^(MASConstraintMaker *make) {
+            make.center.equalTo(wmPlayer);
+            make.width.equalTo(wmPlayer);
+            make.height.equalTo(@30);
+        }];
+        
+    } completion:^(BOOL finished) {
+        wmPlayer.isFullscreen = NO;
+        [self setNeedsStatusBarAppearanceUpdate];
+        wmPlayer.fullScreenBtn.selected = NO;
+        self.isSmallScreen = YES;
+        [[UIApplication sharedApplication].keyWindow bringSubviewToFront:wmPlayer];
+    }];
+}
+
+// 播放器事件
+- (void)wmplayer:(WMPlayer *)wmplayer clickedCloseButton:(UIButton *)closeBtn {
+    if (wmplayer.isFullscreen) {
+        wmplayer.isFullscreen = NO;
+        [self toCell];
+    } else {
+        [self releaseWMPlayer];
+    }
+    
+}
+
+- (void)wmplayer:(WMPlayer *)wmplayer clickedFullScreenButton:(UIButton *)fullScreenBtn {
+    if (fullScreenBtn.isSelected) {//全屏显示
+        wmPlayer.isFullscreen = YES;
+        [self setNeedsStatusBarAppearanceUpdate];
+        [self toFullScreenWithInterfaceOrientation:UIInterfaceOrientationLandscapeRight];
+    } else {
+        if (self.isSmallScreen) {
+            // 放widow上,小屏显示
+            [self toSmallScreen];
+        } else {
+            [self toCell];
+        }
+    }
+}
+
+- (void)wmplayer:(WMPlayer *)wmplayer singleTaped:(UITapGestureRecognizer *)singleTap{
+    NSLog(@"didSingleTaped");
+}
+
+- (void)wmplayer:(WMPlayer *)wmplayer doubleTaped:(UITapGestureRecognizer *)doubleTap{
+    NSLog(@"didDoubleTaped");
+}
+
+///播放状态
+- (void)wmplayerFailedPlay:(WMPlayer *)wmplayer WMPlayerStatus:(WMPlayerState)state {
+    NSLog(@"wmplayerDidFailedPlay");
+}
+
+- (void)wmplayerReadyToPlay:(WMPlayer *)wmplayer WMPlayerStatus:(WMPlayerState)state {
+    NSLog(@"wmplayerDidReadyToPlay");
+}
+
+- (void)wmplayerFinishedPlay:(WMPlayer *)wmplayer {
+    [self releaseWMPlayer];
+}
+
+- (void)releaseWMPlayer {
+    [wmPlayer pause];
+    [wmPlayer removeFromSuperview];
+    [wmPlayer.playerLayer removeFromSuperlayer];
+    [wmPlayer.player replaceCurrentItemWithPlayerItem:nil];
+    wmPlayer.player = nil;
+    wmPlayer.currentItem = nil;
+    //释放定时器，否侧不会调用WMPlayer中的dealloc方法
+    [wmPlayer.autoDismissTimer invalidate];
+    wmPlayer.autoDismissTimer = nil;
+    wmPlayer.playOrPauseBtn = nil;
+    wmPlayer.playerLayer = nil;
+    wmPlayer = nil;
+}
+
 - (void)requestActionWithActionname:(NSString *)actionname {
     
     NHHomeTableViewCell *cell = [self.tableView cellForRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
@@ -278,9 +542,24 @@
 }
 
 #pragma mark - NHHomeTableViewCellDelegate
+- (void)homeTableViewCell:(NHHomeTableViewCell *)cell didClickVideoWithVideoUrl:(NSString *)videoUrl videoCover:(NHBaseImageView *)baseImageView {
+    
+    self.indexPath = [self.tableView indexPathForCell:cell];
+    self.imageView = baseImageView;
+    
+    wmPlayer = [[WMPlayer alloc]initWithFrame:baseImageView.bounds];
+    wmPlayer.delegate = self;
+    wmPlayer.closeBtnStyle = CloseBtnStyleClose;
+    wmPlayer.URLString = videoUrl;
+    [baseImageView addSubview:wmPlayer];
+    [wmPlayer play];
+    
+}
+
 - (void)homeTableViewCellDidClickCategory:(NHHomeTableViewCell *)cell {
     NHHomeServiceDataElement *element = self.cellFrame.model;
-    NHDiscoverTopicViewController *controller = [[NHDiscoverTopicViewController alloc] initWithCatogoryId:element.group.ID];
+    NHDiscoverTopicViewController *controller = [[NHDiscoverTopicViewController alloc] initWithCatogoryId:element.group.category_id];
+    controller.navigationItem.title = element.group.category_name;
     [self pushVc:controller];
 }
 
